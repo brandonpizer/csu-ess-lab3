@@ -1,5 +1,21 @@
 ---
 title: "lab-03"
+subtitle: ESS330
+author: 
+  - name: Brandon Pizer
+    email: bpizer@colostate.edu
 format: html
 ---
+
+```{r}
+library(zoo)
+library(flextable)
+library(tidyverse)
+library(usethis)
+```
+
+```{r}
+usethis::use_git()
+usethis::use_github()
+```
 
