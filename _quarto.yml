@@ -1,7 +1,8 @@
 project:
   title: "csu-ess-lab3"
-  output-dir: docs
   type: website
+  output-dir: docs
+
 
 format:
   html:
