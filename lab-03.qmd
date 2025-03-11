@@ -1,11 +1,13 @@
 ---
-title: "lab-03"
-subtitle: ESS330
+title: "lab 3: Covid Wrangling"
+subtitle: ESS-330
 author: 
   - name: Brandon Pizer
     email: bpizer@colostate.edu
 format: html
 ---
+
+## Initial Packages ##
 
 ```{r}
 library(zoo)
@@ -14,24 +16,27 @@ library(tidyverse)
 library(usethis)
 ```
 
-## Question 2
+## Question  1 & 2 ##
 
 ```{r}
 url = 'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
 covid_data = read_csv(url)
 
 ```
+
+
 ```{r}
 
-txt <- "2022-01-01"
+txt <- "2022-02-01"
 class(txt)
 
 date_example <- as.Date(txt)
 class(date_example)
 
 ```
+
 ```{r}
-my.date <- as.Date("2022-02-01")
+my.date <- as.Date("2021-01-01")
 my.state <- "Colorado"
 
 ```
@@ -63,11 +68,294 @@ filter(colorado, date == my.date) |>
 
 
 ```
-```{r}
 
-pop_url <- 'https://www2.census
+## Question 3 ##
+
+```{r}
+pop_url <- 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/counties/totals/co-est2023-alldata.csv'
+
+pop_data <- read_csv(pop_url)
 
 
 
 ```
+```{r}
+
+pop_data |>
+  mutate(fips = paste0(STATE, COUNTY)) -> pop_data_fips
+
+pop_data_fips |>
+  filter(COUNTY != "000") |>
+  select(contains("NAME"), contains("2021"), contains("fips")) -> final_pop
+
+names(final_pop)
+names(covid_data)
+
+#glimpse(final_pop) just so it doesn't take up a bunch of space
+
+
+
+```
+**Answer 3.2**
+
+After the modifications, the new data has 3,144 rows and 19 columns. Some of these names include STNAME, CTYNAME, POPESTIMATE2022, and fips. The only column that lines up with our covid data is the newly modified fips column.
+
+
+```{r}
+
+PerCap <- inner_join(colorado, select(final_pop, fips, final_pop = POPESTIMATE2021), by = "fips") %>% 
+  filter(date == my.date) %>%
+  mutate(CumPerCap = cases / final_pop, NewCasesPerCap = new_cases / final_pop, NewDeathsPerCap = new_deaths / final_pop)
+  
+
+
+range(final_pop$POPESTIMATE2021)
+
+```
+**Answer 3.3**
+
+The range of the data is 54 to 9,809,462
+
+
+```{r}
+library(flextable)
+PerCap %>%
+  select(County = county, Cases = CumPerCap) %>%
+  slice_max(Cases, n =5) %>% 
+  flextable() %>%
+  set_caption(caption = "Most Cumulative Cases per Capita")
+
+PerCap %>%
+  select(County = county, Cases = NewCasesPerCap) %>%
+  slice_max(Cases, n = 5) %>%
+  flextable() %>%
+  set_caption(caption = "Most New Cases per Capita")
+
+```
+
+## Question 4 ##
+
+```{r}
+library(tidyverse)
+
+joined_fips <- inner_join(colorado, final_pop, by = "fips")
+
+last_14 <- joined_fips |>
+  filter(between(date, my.date - 13, my.date)) |>
+  group_by(county, POPESTIMATE2021) |>
+  summarise(total_new_cases = sum(new_cases)) |>
+  mutate(cases_per_100k = (total_new_cases / POPESTIMATE2021) * 100000) %>% 
+  ungroup()
+
+last_14 |>
+  slice_max(cases_per_100k, n = 5)
+
+```
+           
+**Answer** 
+
+The top 5 counties with the most new cases per 100k in the last 14 days is Bent, Crowley, Pitkin, Phillips, and Fremont.
+           
+           
+## Question 5 ##
+
+```{r}
+library(tidyverse)
+
+joined_fips |>
+  mutate(year = year(date)) |>
+  filter(year == 2021) |>
+  select(year, date, county, deaths, DEATHS2021) |>
+  group_by(county, DEATHS2021) |>
+  summarize(deaths_start = sum(deaths[date == as.Date("2021-01-01")], na.rm = TRUE),
+            deaths_end = sum(deaths[date == as.Date("2021-12-31")], na.rm = TRUE)) |>
+  mutate(total_covid_deaths = deaths_end - deaths_start) |>
+  mutate(percentage_covid = (total_covid_deaths / DEATHS2021) * 100) |>
+  select(percentage_covid, county) |>
+  filter(percentage_covid > 20) -> percentage_deaths
+
+percentage_deaths |>
+  ggplot(aes(x = county, 
+             y = percentage_covid)) +
+  geom_col(fill = "blue") +
+  labs(title = "Colorado Counties with over 20% of Their 2021 Deaths resulting from COVID-19",
+       x = "County",
+       y = "Percentage",
+       subtitle = "Data Source: NY-Times, US Census",
+       caption = "By: Brandon Pizer ESS-330")
+  
+ 
+
+```
+
+## Question 6 ##
+
+```{r}
+
+library(zoo)
+
+covid_data |>
+  group_by(date, state) |>
+  summarise(cases = sum(cases)) |>
+  filter(state %in% c('New York', "Ohio", 'Colorado', "Alabama")) |>
+  group_by(state) |>
+  mutate(newCases = cases - lag(cases)) |>
+  mutate(roll = rollmean(newCases, k = 7, align = "right", fill = NA)) |>
+  ungroup() -> four_states_data
+
+ggplot(four_states_data, aes(x = date)) +
+  geom_col(aes(y = newCases), fill = "lightblue", col = NA) +
+  geom_line(aes(y = roll), col = "darkblue", size = 1) +
+  theme_linedraw() +
+  facet_wrap(~state, nrow = 2, scales = "free_y") +
+  labs(title = "Cumulative Daily COVID-19 Cases",
+       x = "Date",
+       y = "New Cases")
+
+
+
+
+```
+
+```{r}
+library(zoo)
+
+pop_data |>
+  group_by(STNAME) |>
+  summarise(state_pop = sum(POPESTIMATE2021)) |>
+  inner_join(four_states_data, by  = c("STNAME" = "state")) |>
+  mutate(per_capita_new = newCases / state_pop) |>
+  group_by(STNAME) |>
+  mutate(roll = rollmean(per_capita_new, k = 7, align = "right", fill = NA)) |>
+  ungroup() -> four_state_scaled
+
+ggplot(four_state_scaled, aes(x = date)) +
+  geom_line(aes(y = roll, col = STNAME), size = 1) +
+  theme_classic() +
+  labs(title = "Cumulative COVID-19 Cases Per Capita",
+       x = "Date",
+       y = "Cases",
+       color = "State")
+
+
+```
+
+**Answer 6.5**
+
+Although the first graph using facet_wrap is easy to look at, it's not that easy to compare each state (especially when the y-axis do not match). The second graph on the other hand uses a per capita scaling so each state has a somewhat equal representation. It makes Alabama look way worse, by that I mean having more cases, in general compared to graph 1. Alabama has equal footing with New York which has a population almost quadruple the size. To put it simply, scaling represents states on an even playing field, which in turn, is more valuable data.
+
+## Question 7 ##
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(maps)
+
+location_data = read.csv('https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/refs/heads/main/resources/county-centroids.csv')
+
+mutated_covid <- covid_data |>
+  mutate(fips = as.integer(fips))
+
+# the covid date fips code was registered as a character so I had to convert it to numeric.
+
+location_covid <- inner_join(mutated_covid, location_data, by = "fips")
+
+location_covid |>
+  group_by(date) |>
+  summarise(wmX_c = sum(LON*cases) / sum(cases), wmY_c = sum(LAT*cases) / sum(cases), cases = sum(cases)) |>
+  arrange(date) |>
+  mutate(day = 1:n()) -> space_time
+
+ggplot(space_time) +
+  borders("state", fill = "gray90", color = "white") +
+  geom_point(aes(x = wmX_c, y = wmY_c, size = cases), colour = "blue", alpha = .25) +
+  theme_linedraw() +
+  labs(colour = "day",
+       size = "Cases",
+       title = "Weighted Center of the COVID-19 Cases in the USA",
+       x = "",
+       y = "",
+       subtitle = "Data Source: NY-Times, CSU ESS-330",
+       caption = "By Brandon Pizer 2025")
+  
+
+
+
+```
+
+**Answer 7.1**
+
+It seems that from the data, the COVID-19 virus started more on the west coast as the epicenters are leaning more towards states like Utah and one in Washington. However, as time moves on the east coast gains more cases and the epicenter moves closer to what looks like Illinois and Ohio. Towards the end, the epicenter makes its way back more centrally as most states had numerous cases and ,according to the graph, ends in southern Missouri. This would all makes sense because many of the first states to be infected were west coast states and Illinois. A main driver has to be population because the epicenters are centered around the states that have the most population; examples including California, New York, Illinois, and Texas. Most of these States have dense urban cities that are really good at spreading COVID-19. Population helps explain the epicenters.
+
+
+## Question 8 ##
+
+```{r}
+
+library(patchwork)
+
+location_covid |>
+  group_by(date) |>
+  summarise(wmX_c = sum(LON*cases) / sum(cases), wmY_c = sum(LAT*cases) / sum(cases), wmX_d = sum(LON*deaths) / sum(deaths), wmY_d = sum(LAT*deaths) / sum(deaths), cases = sum(cases), deaths = sum(deaths)) |>
+  arrange(date) |>
+  mutate(day = 1:n()) -> space_time_cd
+
+p1 <- ggplot(space_time_cd) +
+  borders("state", fill = "gray90", color = "white") +
+  geom_point(aes(x = wmX_c, y = wmY_c, size = cases), colour = "red", alpha = .25) +
+  theme_linedraw() +
+  labs(colour = "Time",
+       size = "Cases",
+       title = "Weighted Center of COVID Cases",
+       x = "",
+       y = "",
+       subtitle = "Data Source: NY-Times, CSU ESS-330",
+       caption = "By Brandon Pizer 2025")
+
+p2 <- ggplot(space_time_cd) +
+  borders("state", fill = "gray90", color = "white") +
+  geom_point(aes(x = wmX_d, y = wmY_d, size = deaths), colour = "navy", alpha = .25) +
+  theme_linedraw() +
+  labs(colour = "Time",
+       size = "Deaths",
+       title = "Weighted Center of COVID deaths",
+       x = "",
+       y = "",
+       subtitle = "Data Source: NY-Times, CSU ESS-330",
+       caption = "By Brandon Pizer 2025")
+
+p1 | p2
+
+
+
+
+
+
+```
+
+**Answer 8.1**
+
+```{r}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
