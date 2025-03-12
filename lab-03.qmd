@@ -335,12 +335,13 @@ p1 | p2
 
 **Answer 8.1**
 
-```{r}
+Looking at the two graphs, you can definitely see a correlation between death and case epicenter. It looks like for the most part that the pandemic began in Washington and slowly swept across the country. It would make sense that the places with the most cases would most likely see more deaths as well. My assumption is that the east coast had more deaths, particularly in the New England area which has a large population. This is why the finishing epicenter for the covid deaths is closer to Ohio.
 
 
 
 
-```
+
+
 
 
 
